@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <title>Admin Duyệt Thẻ - Hoang Kun Store</title>
+    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        body { font-family: 'Quicksand', sans-serif; background: #f4f7fe; padding: 40px; }
+        .admin-container { max-width: 1000px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 15px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); }
+        h2 { text-align: center; color: #6c5ce7; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 12px; border: 1px solid #ddd; text-align: center; }
+        th { background: #6c5ce7; color: #fff; }
+        .btn-approve { background: #2ecc71; color: #fff; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; }
+        .btn-reject { background: #e74c3c; color: #fff; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; }
+        .status-wait { color: #f39c12; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <h2>DANH SÁCH THẺ CHỜ DUYỆT</h2>
+        <table id="list-recharge">
+            <thead>
+                <tr>
+                    <th>Khách hàng</th>
+                    <th>Loại thẻ</th>
+                    <th>Mệnh giá</th>
+                    <th>Seri / Mã thẻ</th>
+                    <th>Thời gian</th>
+                    <th>Hành động</th>
+                </tr>
+            </thead>
+            <tbody id="table-body">
+                </tbody>
+        </table>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
+        import { getDatabase, ref, onValue, update, get } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCt20_2svxHHPgp_tttW7MiaS0vTU1knS0",
+            authDomain: "hoangkunstore.firebaseapp.com",
+            databaseURL: "https://hoangkunstore-default-rtdb.firebaseio.com",
+            projectId: "hoangkunstore"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+
+        // 1. Lấy danh sách thẻ từ recharge_logs
+        const logsRef = ref(database, 'recharge_logs');
+        onValue(logsRef, (snapshot) => {
+            const data = snapshot.val();
+            const tableBody = document.getElementById("table-body");
+            tableBody.innerHTML = "";
+
+            if (data) {
+                Object.keys(data).forEach(key => {
+                    const item = data[key];
+                    if (item.status === "Chờ duyệt") {
+                        const row = `<tr>
+                            <td><b>${item.username}</b></td>
+                            <td>${item.cardType}</td>
+                            <td>${new Intl.NumberFormat('vi-VN').format(item.amount)}đ</td>
+                            <td>${item.serial} / ${item.pin}</td>
+                            <td>${item.time}</td>
+                            <td>
+                                <button class="btn-approve" onclick="actionCard('${key}', '${item.username}', ${item.amount}, 'Duyệt')">DUYỆT</button>
+                                <button class="btn-reject" onclick="actionCard('${key}', '${item.username}', ${item.amount}, 'Hủy')">HỦY</button>
+                            </td>
+                        </tr>`;
+                        tableBody.innerHTML += row;
+                    }
+                });
+            }
+        });
+
+        // 2. Hàm xử lý Duyệt hoặc Hủy
+        window.actionCard = async (key, username, amount, action) => {
+            if (action === 'Duyệt') {
+                // Lấy số tiền hiện tại của khách
+                const userRef = ref(database, 'users/' + username);
+                const userSnap = await get(userRef);
+                const currentMoney = userSnap.val().money || 0;
+                const newMoney = currentMoney + amount;
+
+                // Cộng tiền cho khách
+                await update(ref(database, 'users/' + username), { money: newMoney });
+                // Cập nhật trạng thái thẻ thành Thành công
+                await update(ref(database, 'recharge_logs/' + key), { status: 'Thành công' });
+                
+                Swal.fire('Thành công', 'Đã cộng ' + amount + 'đ cho ' + username, 'success');
+            } else {
+                // Nếu hủy thì chỉ đổi trạng thái
+                await update(ref(database, 'recharge_logs/' + key), { status: 'Thẻ sai' });
+                Swal.fire('Đã hủy', 'Đã từ chối thẻ của ' + username, 'error');
+            }
+        };
+    </script>
+</body>
+</html>
